@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Analyzer</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+</head>
+<body>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <h4 class="text-primary">Analyzing Resume...</h4>
+        <p class="text-muted">Asking Gemini for insights...</p>
+    </div>
+
+    <div class="container main-container my-5">
+        
+        <!-- Header -->
+        <div class="text-center mb-5">
+            <h1 class="fw-bold text-dark">AI Resume Analyzer</h1>
+            <p class="text-muted">Optimize your CV with Rule-Based Logic & Gemini AI</p>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="custom-card">
+            <form method="post" enctype="multipart/form-data" id="upload-form">
+                
+                <!-- Custom File Upload Area -->
+                <div class="upload-area" id="drop-area">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h5 class="mb-2">Drag & Drop or Click to Upload</h5>
+                    <p class="text-muted small">Supported formats: PDF, DOCX</p>
+                    <p id="file-name" class="text-primary fw-bold mt-2"></p> <!-- Displays filename here -->
+                    <input type="file" class="file-input" id="file" name="file" accept=".pdf,.docx" required onchange="showFileName()">
+                </div>
+
+                <!-- AI Toggle -->
+                <div class="toggle-container d-flex align-items-center justify-content-between">
+                    <div>
+                        <label class="form-check-label fw-bold mb-0" for="aiScoreCheck">
+                            <i class="fas fa-robot text-primary me-2"></i>Enable Deep AI Scoring
+                        </label>
+                        <small class="text-muted d-block">Get a qualitative score from Google Gemini (Slower)</small>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="aiScoreCheck" name="enable_ai_scoring" style="width: 3em; height: 1.5em;">
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="mt-4">
+                    <button class="btn btn-primary btn-analyze" type="submit">
+                        Analyze My Resume
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        {% if results %}
+        <!-- Results Section -->
+        <div class="row g-4">
+            
+            <!-- Rule Based Score -->
+            <div class="col-md-6">
+                <div class="custom-card score-card h-100">
+                    <h4 class="text-center mb-4"><i class="fas fa-tasks me-2"></i>ATS Score</h4>
+                    
+                    <div class="score-circle {% if results.rule_score >= 80 %}bg-score-high{% elif results.rule_score >= 60 %}bg-score-med{% else %}bg-score-low{% endif %}">
+                        {{ results.rule_score }}
+                    </div>
+                    
+                    <div class="mt-4">
+                        <ul class="list-group list-group-flush">
+                            {% for item, value in results.rule_breakdown.items() %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent">
+                                    {{ item }}
+                                    <span class="badge bg-secondary rounded-pill">{{ value }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Score -->
+            <div class="col-md-6">
+                <div class="custom-card score-card h-100" style="border: 2px solid {% if results.ai_score %}#6366f1{% else %}#e2e8f0{% endif %};">
+                    <h4 class="text-center mb-4"><i class="fas fa-brain me-2"></i>AI Evaluation</h4>
+                    
+                    {% if results.ai_score is not none %}
+                        <div class="score-circle bg-score-ai">
+                            {{ results.ai_score }}
+                        </div>
+                        <p class="text-center mt-3 text-muted fw-bold">AI's Verdict:</p>
+                        <div class="alert alert-light border mt-2">
+                            {{ results.ai_reason }}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5 text-muted opacity-50">
+                            <i class="fas fa-toggle-off fa-3x mb-3"></i>
+                            <p>AI Scoring was disabled.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="col-12">
+                <div class="custom-card">
+                    <h4 class="mb-3"><i class="fas fa-file-alt me-2"></i>Executive Summary</h4>
+                    <div class="p-3 bg-light rounded text-secondary" style="line-height: 1.8;">
+                        {{ results.summary | replace('\n', '<br>') | safe }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS for UX -->
+    <script>
+        // 1. Show selected filename
+        function showFileName() {
+            const fileInput = document.getElementById('file');
+            const fileNameDisplay = document.getElementById('file-name');
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = "Selected: " + fileInput.files[0].name;
+                document.getElementById('drop-area').style.borderColor = '#6366f1';
+                document.getElementById('drop-area').style.backgroundColor = '#eef2ff';
+            }
+        }
+
+        // 2. Show Loading Overlay on Submit
+        const form = document.getElementById('upload-form');
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        form.addEventListener('submit', function() {
+            // Check if file is selected before showing loader
+            if (document.getElementById('file').files.length > 0) {
+                loadingOverlay.style.display = 'flex';
+            }
+        });
+    </script>
+</body>
+</html>
